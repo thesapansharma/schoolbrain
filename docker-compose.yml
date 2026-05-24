@@ -1,0 +1,52 @@
+version: "3.9"
+
+# SchoolBrain.ai — Docker Compose
+# Start everything: docker compose up -d
+# View logs:        docker compose logs -f api
+
+services:
+
+  api:
+    build: .
+    container_name: schoolbrain_api
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-CHANGE_ME_32_CHARS_RANDOM}
+      - DATA_DIR=/app/data/schools
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    volumes:
+      - ./data:/app/data
+      - ./memory:/app/memory
+      - ./schoolbrain.db:/app/schoolbrain.db
+      - ./reports:/app/reports
+    depends_on:
+      - redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # reach Ollama on host
+
+  redis:
+    image: redis:7-alpine
+    container_name: schoolbrain_redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  # Optional: Celery worker for background tasks (alerts, LoRA training)
+  worker:
+    build: .
+    container_name: schoolbrain_worker
+    restart: always
+    command: celery -A tasks worker --loglevel=info
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-CHANGE_ME_32_CHARS_RANDOM}
+      - DATA_DIR=/app/data/schools
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    volumes:
+      - ./data:/app/data
+      - ./memory:/app/memory
+    depends_on:
+      - redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
